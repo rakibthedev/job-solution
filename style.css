@@ -94,14 +94,14 @@ body {
     font-weight: 600;
     margin-bottom: 10px;
     line-height: 160%;
-    font-size: 1rem;
+    font-size: 0.9rem;
 }
 
 .options {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    font-size: 1rem;
+    font-size: 0.9rem;
 }
 
 .option {
@@ -236,4 +236,43 @@ input:focus{
         padding-top: 50px;
         margin-top: 0;
     }
+
+    .question-card{
+        max-width: 95%;
+    }
+}
+
+
+
+
+
+
+/* Smooth scrolling for long equations */
+.question-card math::-webkit-scrollbar {
+    height: 6px;
+}
+
+.question-card math::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 10px;
+}
+
+/* Fix images overflowing the question card */
+.question-card img {
+    max-width: 95%;
+    height: auto;
+    display: block;
+}
+
+/* Wrap long expressions / inline text */
+.question-card,
+.question-label {
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+
+
+math {
+    white-space: normal !important;
 }
