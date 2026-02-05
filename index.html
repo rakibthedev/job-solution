@@ -1,552 +1,497 @@
-<!DOCTYPE html>
-<html lang="bn">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Job Solution | Job Study Hub BD</title>
-<link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-<link rel="shortcut icon" href="icons/icon-192.png" type="image/x-icon">
-<link rel="stylesheet" href="style.css">
-<!-- ✅ Load MathJax with LaTeX rendering -->
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
-</head>
-<body>
-
-<div class="hamburger" id="hamburger"><i class="fas fa-bars"></i></div>
-
-<div class="container-wrapper">
-  <div class="sidebar" id="sidebar"></div>
-  <div class="main-container">
-    <div id="headerDiv" class="header"></div>
-    <div id="questions"></div>
-    <div class="pagination" id="pagination"></div>
-  </div>
-</div>
-
-<div class="counter" id="counter"></div>
-
-<script>
-const mcqs = {
-  "BCS (10 - 46)": "./mcq/bcs_all.json",
-  "Primary (upto 2024)": "./mcq/primary_all.json",
-};
-
-let data = { header: [], questions: [] },
-  currentPage = 1,
-  currentExamKey = null,
-  currentFilter = "all"; // all | right | wrong | fav
-const perPage = 50;
-
-const sidebar = document.getElementById("sidebar");
-const headerDiv = document.getElementById("headerDiv");
-const questionsDiv = document.getElementById("questions");
-const paginationDiv = document.getElementById("pagination");
-const counterDiv = document.getElementById("counter");
-const hamburger = document.getElementById("hamburger");
-
-// ==================== HAMBURGER ====================
-// Toggle sidebar when clicking hamburger
-hamburger.addEventListener("click", (e) => {
-  e.stopPropagation(); // Prevent the click from bubbling up to document
-  sidebar.classList.toggle("show");
-});
-
-// Close sidebar when clicking outside
-document.addEventListener("click", (e) => {
-  // Check if sidebar is open
-  if (!sidebar.classList.contains("show")) return;
-
-  // If clicked element is NOT sidebar or hamburger, close it
-  if (!sidebar.contains(e.target) && e.target !== hamburger) {
-    sidebar.classList.remove("show");
-  }
-});
-
-
-
-// ==================== SIDEBAR ====================
-for (let exam in mcqs) {
-  const div = document.createElement("div");
-  div.textContent = exam;
-  div.addEventListener("click", () => {
-    if (div.classList.contains("active")) return;
-    document.querySelectorAll(".sidebar div").forEach((d) => d.classList.remove("active"));
-    div.classList.add("active");
-    loadExam(mcqs[exam], exam);
-    if (window.innerWidth <= 700) sidebar.classList.remove("show");
-  });
-  sidebar.appendChild(div);
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-  const firstExam = Object.keys(mcqs)[0];
-  document.querySelector(".sidebar div").classList.add("active");
-  loadExam(mcqs[firstExam], firstExam);
-});
-
-// ==================== LOAD EXAM ====================
-function loadExam(file, examKey) {
-  currentExamKey = examKey;
-  currentFilter = "all";
-  fetch(file)
-    .then((res) => res.json())
-    .then((json) => {
-      const firstHeaderObj = json.find((item) => item.header);
-      const header = firstHeaderObj?.header || [];
-      const questions = json.filter((item) => item.label);
-      questions.forEach((q) => (q.selected = null));
-
-      data = { header, questions };
-
-      const saved = localStorage.getItem(`mcq_${examKey}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          currentPage = parsed.page || 1;
-          data.questions.forEach((q, idx) => {
-            if (parsed.selected && parsed.selected[idx] !== undefined) {
-              q.selected = parsed.selected[idx];
-            }
-          });
-        } catch (e) {
-          console.warn("Restore failed", e);
-        }
-      } else currentPage = 1;
-
-      updateCounter();
-      headerDiv.innerHTML = header.map((h) => `<div>${h}</div>`).join("");
-      renderPage(currentPage);
-    })
-    .catch((err) => console.error("Failed to load exam:", err));
-}
-
-// ==================== SAVE PROGRESS ====================
-function saveProgress() {
-  if (!currentExamKey) return;
-  const selected = data.questions.map((q) => q.selected);
-  localStorage.setItem(`mcq_${currentExamKey}`, JSON.stringify({ page: currentPage, selected }));
-}
-
-// ==================== FAV LOCAL STORAGE ====================
-function getFavs() {
-  try {
-    return JSON.parse(localStorage.getItem(`fav_${currentExamKey}`)) || [];
-  } catch {
-    return [];
-  }
-}
-function saveFavs(list) {
-  localStorage.setItem(`fav_${currentExamKey}`, JSON.stringify(list));
-}
-
-// ==================== COUNTER ====================
-function updateCounter() {
-  let right = 0,
-    wrong = 0;
-
-  data.questions.forEach((q) => {
-    if (q.selected) q.selected === q.answer ? right++ : wrong++;
-  });
-
-  const favs = getFavs();
-  const favCount = favs.length;
-
-  counterDiv.innerHTML = `
-      <span id="rightCount" style="cursor:pointer; display:flex; align-items:center; gap:4px; color:#27ae60; font-weight:bold;">
-        <i class="fa fa-check-circle" aria-hidden="true"></i>${right}
-      </span>
-      <span id="wrongCount" style="cursor:pointer; display:flex; align-items:center; gap:4px; color:#e74c3c; font-weight:bold;">
-        <i class="fa fa-times-circle" aria-hidden="true"></i>${wrong}
-      </span>
-      <span id="favFilter" style="cursor:pointer; display:flex; align-items:center; gap:4px; color:#f1c40f; font-weight:bold;">
-        <i class="fa fa-heart"></i>${favCount}
-      </span>
-  `;
-
-  counterDiv.style.background = "#2c3e50";
-  counterDiv.style.display = "flex";
-  counterDiv.style.gap = "6px";
-  counterDiv.style.alignItems = "center";
-  counterDiv.style.padding = "6px 8px";
-
-
-
-  saveProgress();
-
-  document.getElementById("rightCount").onclick = () => {
-    currentFilter = "right";
-    currentPage = 1;
-    renderPage(currentPage);
-    showClearFilterButton();
-  };
-  document.getElementById("wrongCount").onclick = () => {
-    currentFilter = "wrong";
-    currentPage = 1;
-    renderPage(currentPage);
-    showClearFilterButton();
-  };
-  document.getElementById("favFilter").onclick = () => {
-    currentFilter = "fav";
-    currentPage = 1;
-    renderPage(currentPage);
-    showClearFilterButton();
-  };
-}
-
-// ==================== CLEAR FILTER BUTTON ====================
-let clearFilterBtn = document.createElement("button");
-clearFilterBtn.textContent = "✖ Clear Filter";
-Object.assign(clearFilterBtn.style, {
-  position: "fixed",
-  bottom: "80px",
-  right: "0",
-  background: "#00796b",
-  color: "#fff",
-  border: "none",
-  padding: "4px 10px",
-  cursor: "pointer",
-  borderTopLeftRadius: "10px",
-  borderBottomLeftRadius: "10px",
-  zIndex: "99",
-  display: "none",
-  fontSize: "12px"
-});
-document.body.appendChild(clearFilterBtn);
-
-clearFilterBtn.addEventListener("click", () => {
-  currentFilter = "all";
-
-  // Restore page from localStorage if exists, otherwise keep currentPage
-  const saved = localStorage.getItem(`mcq_${currentExamKey}`);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      currentPage = parsed.page || currentPage; // keep saved page
-    } catch (e) {
-      console.warn("Failed to restore page:", e);
-    }
-  }
-
-  renderPage(currentPage);
-  hideClearFilterButton();
-});
-
-
-function showClearFilterButton() {
-  clearFilterBtn.style.display = "block";
-}
-function hideClearFilterButton() {
-  clearFilterBtn.style.display = "none";
-}
-// ==================== COPY IDS BUTTON ====================
-const copyIdsBtn = document.createElement("button");
-copyIdsBtn.textContent = "📋 Copy IDs";
-Object.assign(copyIdsBtn.style, {
-  position: "fixed",
-  bottom: "120px",
-  right: "0",
-  background: "#1565c0",
-  color: "#fff",
-  border: "none",
-  padding: "6px 12px",
-  cursor: "pointer",
-  borderTopLeftRadius: "10px",
-  borderBottomLeftRadius: "10px",
-  zIndex: "99",
-  fontSize: "12px"
-});
-document.body.appendChild(copyIdsBtn);
-
-// ==================== RENDER PAGE ====================
-function renderPage(page) {
-  questionsDiv.innerHTML = "";
-
-  if (currentFilter === "all") hideClearFilterButton();
-  else showClearFilterButton();
-
-  let filtered = data.questions;
-  if (currentFilter === "right") filtered = data.questions.filter((q) => q.selected && q.selected === q.answer);
-  if (currentFilter === "wrong") filtered = data.questions.filter((q) => q.selected && q.selected !== q.answer);
-  if (currentFilter === "fav") {
-    const favs = getFavs();
-    filtered = data.questions.filter((q) => favs.includes(q.label));
-  }
-
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const start = (page - 1) * perPage;
-  const end = Math.min(start + perPage, filtered.length);
-  const pageQuestions = filtered.slice(start, end);
-
-  const favList = getFavs();
-
-  pageQuestions.forEach((q, idx) => {
-    const card = document.createElement("div");
-    card.className = "question-card";
-
-    const label = document.createElement("div");
-    label.className = "question-label";
-    label.innerHTML = `<div>${start + idx + 1}. ${q.label}</div>`;
-
-    // 💖 Heart button
-    const heart = document.createElement("span");
-    heart.className = "heart-btn";
-    heart.innerHTML = favList.includes(q.label) ? "❤️" : "🤍";
-    heart.style.cursor = "pointer";
-    heart.style.marginLeft = "8px";
-    heart.style.fontSize = "20px";
-    heart.onclick = (e) => {
-      e.stopPropagation();
-      let favs = getFavs();
-      if (favs.includes(q.label)) {
-        favs = favs.filter((f) => f !== q.label);
-        heart.innerHTML = "🤍";
-      } else {
-        favs.push(q.label);
-        heart.innerHTML = "❤️";
-      }
-      saveFavs(favs);
-      updateCounter();
-    };
-
-    label.appendChild(heart);
-    card.appendChild(label);
-
-    const optionsDiv = document.createElement("div");
-    optionsDiv.className = "options";
-    q.options.forEach((opt, oidx) => {
-      const optionEl = document.createElement("div");
-      optionEl.className = "option";
-      optionEl.innerHTML = opt;
-
-      const thisKey = ["a", "b", "c", "d"][oidx];
-
-      if (q.selected) {
-        optionEl.classList.add("disabled");
-        if (thisKey === q.answer) optionEl.classList.add("correct");
-        if (thisKey === q.selected && q.selected !== q.answer) optionEl.classList.add("wrong");
-      }
-
-      optionEl.addEventListener("click", () => {
-        if (q.selected) return;
-        q.selected = thisKey;
-        optionsDiv.querySelectorAll(".option").forEach((o) => o.classList.add("disabled"));
-        if (q.selected === q.answer) optionEl.classList.add("correct");
-        else {
-          optionEl.classList.add("wrong");
-          const rightBtn = optionsDiv.querySelector(
-            `.option:nth-child(${q.answer.charCodeAt(0) - 97 + 1})`
-          );
-          if (rightBtn) rightBtn.classList.add("correct");
-        }
-        updateCounter();
-      });
-
-      optionsDiv.appendChild(optionEl);
-    });
-
-    card.appendChild(optionsDiv);
-    questionsDiv.appendChild(card);
-  });
-
-  renderPagination(page, filtered.length);
-}
-// ==================== PAGINATION ====================
-function renderPagination(page, totalQuestions) {
-  paginationDiv.innerHTML = ""; // Clear previous pagination
-
-  const totalPages = Math.ceil(totalQuestions / perPage);
-
-  // ---------------- Pagination buttons wrapper ----------------
-  const wrapper = document.createElement("div");
-  wrapper.className = "pagination-menu"; // wrapper for buttons
-  wrapper.style.display = "flex";
-  wrapper.style.alignItems = "center";
-  wrapper.style.gap = "4px"; // spacing between buttons
-
-  const makeBtn = (txt, click, disabled) => {
-    const b = document.createElement("button");
-    b.textContent = txt;
-    if (disabled) b.classList.add("disabled");
-    b.onclick = click;
-    wrapper.appendChild(b);
-  };
-
-  // First page
-  makeBtn("<<", () => { currentPage = 1; renderPage(currentPage); saveProgress(); }, page === 1);
-
-  // Previous page
-  makeBtn("<", () => { currentPage--; renderPage(currentPage); saveProgress(); }, page === 1);
-
-  // Current page ±1
-  for (let i = Math.max(1, page - 1); i <= Math.min(totalPages, page + 1); i++) {
-    makeBtn(i, () => { currentPage = i; renderPage(currentPage); saveProgress(); }, i === page);
-  }
-
-  // Next page
-  makeBtn(">", () => { currentPage++; renderPage(currentPage); saveProgress(); }, page === totalPages);
-
-  // Last page
-  makeBtn(">>", () => { currentPage = totalPages; renderPage(currentPage); saveProgress(); }, page === totalPages);
-
-  // Append pagination buttons wrapper to paginationDiv
-  paginationDiv.appendChild(wrapper);
-
-  // ---------------- Jump to Page Input ----------------
-  const jumpDiv = document.createElement("div");
-  jumpDiv.style.display = "flex";
-  jumpDiv.style.alignItems = "center";
-  jumpDiv.style.marginTop = "10px"; // spacing below buttons
-
-  const input = document.createElement("input");
-  input.type = "number";
-  input.min = 1;
-  input.max = totalPages;
-  input.placeholder = `${currentPage}/${totalPages}`;
-  input.style.width = "60px";
-  input.style.marginRight = "5px";
-  input.style.padding = "4px";
-  input.style.border = "1px solid #6a1b9a";
-  input.style.borderRadius = "4px";
-
-  const jumpBtn = document.createElement("button");
-  jumpBtn.textContent = "Go";
-  jumpBtn.style.padding = "4px 10px";
-  jumpBtn.addEventListener("click", () => {
-    let num = parseInt(input.value, 10);
-    if (!isNaN(num) && num >= 1 && num <= totalPages) {
-      currentPage = num;
-      renderPage(currentPage);
-      saveProgress();
-    } else {
-      alert(`Please enter a number between 1 and ${totalPages}`);
-    }
-    input.value = "";
-  });
-
-  jumpDiv.appendChild(input);
-  jumpDiv.appendChild(jumpBtn);
-
-  // Append jumpDiv to paginationDiv (outside pagination-menu)
-  paginationDiv.appendChild(jumpDiv);
-}
-
-// ==================== RESET BUTTON ====================
-const resetBtn = document.createElement("button");
-resetBtn.textContent = "⟲ Reset";
-Object.assign(resetBtn.style, {
-  position: "fixed",
-  bottom: "225px",
-  left: "0",
-  background: "#d32f2f",
-  color: "#fff",
-  border: "none",
-  padding: "6px 12px",
-  cursor: "pointer",
-  borderTopRightRadius: "10px",
-  borderBottomRightRadius: "10px",
-  zIndex: "99",
-});
-document.body.appendChild(resetBtn);
-
-// Reset all also fav 
-resetBtn.onclick = () => {
-  if (!currentExamKey) return;
-  const choice = prompt("Type 'all' to reset entire exam OR 'this' to reset this page only:");
-  if (!choice) return;
-
-  if (choice.toLowerCase() === "all") {
-    if (!confirm("Reset ALL pages and favorites for this exam?")) return;
-    // Clear answers
-    localStorage.removeItem(`mcq_${currentExamKey}`);
-    data.questions.forEach((q) => (q.selected = null));
-    // Clear favorites
-    localStorage.removeItem(`fav_${currentExamKey}`);
-
-    currentPage = 1;
-    currentFilter = "all";
-    updateCounter();
-    renderPage(currentPage);
-  } else if (choice.toLowerCase() === "this") {
-    if (!confirm("Reset this page and favorites for this exam?")) return;
-    const start = (currentPage - 1) * perPage;
-    const end = Math.min(start + perPage, data.questions.length);
-    // Clear answers for current page
-    data.questions.slice(start, end).forEach((pq) => (pq.selected = null));
-    // Clear all favorites for the exam
-    localStorage.removeItem(`fav_${currentExamKey}`);
-
-    saveProgress();
-    updateCounter();
-    renderPage(currentPage);
-  } else alert("Invalid input!");
-};
-
-// ==================== SCROLL BUTTON ====================
-const scrollBtn = document.createElement("button");
-scrollBtn.textContent = "↓ Bottom";
-Object.assign(scrollBtn.style, {
-  position: "fixed",
-  bottom: "20px",
-  right: "0",
-  background: "#6a1b9a",
-  color: "#fff",
-  border: "none",
-  padding: "6px 11px",
-  cursor: "pointer",
-  borderTopLeftRadius: "10px",
-  borderBottomLeftRadius: "10px",
-  zIndex: "99",
-});
-document.body.appendChild(scrollBtn);
-
-scrollBtn.addEventListener("click", () => {
-  if (scrollBtn.textContent === "↓ Bottom") window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-  else window.scrollTo({ top: 0, behavior: "smooth" });
-});
-window.addEventListener("scroll", () => {
-  const scrolled = window.scrollY / (document.body.scrollHeight - window.innerHeight);
-  scrollBtn.textContent = scrolled > 0.1 ? "↑ Top" : "↓ Bottom";
-});
-
-function getFilteredQuestionIds() {
-  let list = data.questions;
-
-  if (currentFilter === "right") {
-    list = data.questions.filter(
-      (q) => q.selected && q.selected === q.answer
-    );
-  }
-
-  if (currentFilter === "wrong") {
-    list = data.questions.filter(
-      (q) => q.selected && q.selected !== q.answer
-    );
-  }
-
-  if (currentFilter === "fav") {
-    const favs = getFavs();
-    list = data.questions.filter((q) => favs.includes(q.label));
-  }
-
-  return list.map((q) => q.label).join(", ");
-}
-
-copyIdsBtn.addEventListener("click", () => {
-  const ids = getFilteredQuestionIds();
-
-  if (!ids) {
-    alert("No question IDs to copy!");
-    return;
-  }
-
-  navigator.clipboard.writeText(ids).then(() => {
-    copyIdsBtn.textContent = "✅ Copied!";
-    setTimeout(() => (copyIdsBtn.textContent = "📋 Copy IDs"), 1200);
-  });
-});
-</script>
-
-
-</body>
-  </html>
+<!DOCTYPE html>  
+<html lang="bn">  
+<head>  
+<meta charset="UTF-8">  
+<meta name="viewport" content="width=device-width, initial-scale=1">  
+<title>Job Solution | Job Study Hub BD</title>  
+<link rel="manifest" href="manifest.json">  
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />  
+<link rel="shortcut icon" href="icons/icon-192.png" type="image/x-icon">  
+<link rel="stylesheet" href="style.css">  
+<!-- ✅ Load MathJax with LaTeX rendering -->  
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>  
+</head>  
+<body>  
+  
+<div class="hamburger" id="hamburger"><i class="fas fa-bars"></i></div>  
+  
+<div class="container-wrapper">  
+  <div class="sidebar" id="sidebar"></div>  
+  <div class="main-container">  
+    <div id="headerDiv" class="header"></div>  
+    <div id="questions"></div>  
+    <div class="pagination" id="pagination"></div>  
+  </div>  
+</div>  
+  
+<div class="counter" id="counter"></div>  
+  
+<script>  
+const mcqs = {  
+  "BCS (10 - 46)": "./mcq/bcs_all.json",  
+  "Primary (upto 2024)": "./mcq/primary_all.json",  
+};  
+  
+let data = { header: [], questions: [] },  
+  currentPage = 1,  
+  currentExamKey = null,  
+  currentFilter = "all"; // all | right | wrong | fav  
+const perPage = 50;  
+  
+const sidebar = document.getElementById("sidebar");  
+const headerDiv = document.getElementById("headerDiv");  
+const questionsDiv = document.getElementById("questions");  
+const paginationDiv = document.getElementById("pagination");  
+const counterDiv = document.getElementById("counter");  
+const hamburger = document.getElementById("hamburger");  
+  
+// ==================== HAMBURGER ====================  
+// Toggle sidebar when clicking hamburger  
+hamburger.addEventListener("click", (e) => {  
+  e.stopPropagation(); // Prevent the click from bubbling up to document  
+  sidebar.classList.toggle("show");  
+});  
+  
+// Close sidebar when clicking outside  
+document.addEventListener("click", (e) => {  
+  // Check if sidebar is open  
+  if (!sidebar.classList.contains("show")) return;  
+  
+  // If clicked element is NOT sidebar or hamburger, close it  
+  if (!sidebar.contains(e.target) && e.target !== hamburger) {  
+    sidebar.classList.remove("show");  
+  }  
+});  
+  
+  
+  
+// ==================== SIDEBAR ====================  
+for (let exam in mcqs) {  
+  const div = document.createElement("div");  
+  div.textContent = exam;  
+  div.addEventListener("click", () => {  
+    if (div.classList.contains("active")) return;  
+    document.querySelectorAll(".sidebar div").forEach((d) => d.classList.remove("active"));  
+    div.classList.add("active");  
+    loadExam(mcqs[exam], exam);  
+    if (window.innerWidth <= 700) sidebar.classList.remove("show");  
+  });  
+  sidebar.appendChild(div);  
+}  
+  
+window.addEventListener("DOMContentLoaded", () => {  
+  const firstExam = Object.keys(mcqs)[0];  
+  document.querySelector(".sidebar div").classList.add("active");  
+  loadExam(mcqs[firstExam], firstExam);  
+});  
+  
+// ==================== LOAD EXAM ====================  
+function loadExam(file, examKey) {  
+  currentExamKey = examKey;  
+  currentFilter = "all";  
+  fetch(file)  
+    .then((res) => res.json())  
+    .then((json) => {  
+      const firstHeaderObj = json.find((item) => item.header);  
+      const header = firstHeaderObj?.header || [];  
+      const questions = json.filter((item) => item.label);  
+      questions.forEach((q) => (q.selected = null));  
+  
+      data = { header, questions };  
+  
+      const saved = localStorage.getItem(`mcq_${examKey}`);  
+      if (saved) {  
+        try {  
+          const parsed = JSON.parse(saved);  
+          currentPage = parsed.page || 1;  
+          data.questions.forEach((q, idx) => {  
+            if (parsed.selected && parsed.selected[idx] !== undefined) {  
+              q.selected = parsed.selected[idx];  
+            }  
+          });  
+        } catch (e) {  
+          console.warn("Restore failed", e);  
+        }  
+      } else currentPage = 1;  
+  
+      updateCounter();  
+      headerDiv.innerHTML = header.map((h) => `<div>${h}</div>`).join("");  
+      renderPage(currentPage);  
+    })  
+    .catch((err) => console.error("Failed to load exam:", err));  
+}  
+  
+// ==================== SAVE PROGRESS ====================  
+function saveProgress() {  
+  if (!currentExamKey) return;  
+  const selected = data.questions.map((q) => q.selected);  
+  localStorage.setItem(`mcq_${currentExamKey}`, JSON.stringify({ page: currentPage, selected }));  
+}  
+  
+// ==================== FAV LOCAL STORAGE ====================  
+function getFavs() {  
+  try {  
+    return JSON.parse(localStorage.getItem(`fav_${currentExamKey}`)) || [];  
+  } catch {  
+    return [];  
+  }  
+}  
+function saveFavs(list) {  
+  localStorage.setItem(`fav_${currentExamKey}`, JSON.stringify(list));  
+}  
+  
+// ==================== COUNTER ====================  
+function updateCounter() {  
+  let right = 0,  
+    wrong = 0;  
+  
+  data.questions.forEach((q) => {  
+    if (q.selected) q.selected === q.answer ? right++ : wrong++;  
+  });  
+  
+  const favs = getFavs();  
+  const favCount = favs.length;  
+  
+  counterDiv.innerHTML = `  
+      <span id="rightCount" style="cursor:pointer; display:flex; align-items:center; gap:4px; color:#27ae60; font-weight:bold;">  
+        <i class="fa fa-check-circle" aria-hidden="true"></i>${right}  
+      </span>  
+      <span id="wrongCount" style="cursor:pointer; display:flex; align-items:center; gap:4px; color:#e74c3c; font-weight:bold;">  
+        <i class="fa fa-times-circle" aria-hidden="true"></i>${wrong}  
+      </span>  
+      <span id="favFilter" style="cursor:pointer; display:flex; align-items:center; gap:4px; color:#f1c40f; font-weight:bold;">  
+        <i class="fa fa-heart"></i>${favCount}  
+      </span>  
+  `;  
+  
+  counterDiv.style.background = "#2c3e50";  
+  counterDiv.style.display = "flex";  
+  counterDiv.style.gap = "6px";  
+  counterDiv.style.alignItems = "center";  
+  counterDiv.style.padding = "6px 8px";  
+  
+  
+  
+  saveProgress();  
+  
+  document.getElementById("rightCount").onclick = () => {  
+    currentFilter = "right";  
+    currentPage = 1;  
+    renderPage(currentPage);  
+    showClearFilterButton();  
+  };  
+  document.getElementById("wrongCount").onclick = () => {  
+    currentFilter = "wrong";  
+    currentPage = 1;  
+    renderPage(currentPage);  
+    showClearFilterButton();  
+  };  
+  document.getElementById("favFilter").onclick = () => {  
+    currentFilter = "fav";  
+    currentPage = 1;  
+    renderPage(currentPage);  
+    showClearFilterButton();  
+  };  
+}  
+  
+// ==================== CLEAR FILTER BUTTON ====================  
+let clearFilterBtn = document.createElement("button");  
+clearFilterBtn.textContent = "✖ Clear Filter";  
+Object.assign(clearFilterBtn.style, {  
+  position: "fixed",  
+  bottom: "80px",  
+  right: "0",  
+  background: "#00796b",  
+  color: "#fff",  
+  border: "none",  
+  padding: "4px 10px",  
+  cursor: "pointer",  
+  borderTopLeftRadius: "10px",  
+  borderBottomLeftRadius: "10px",  
+  zIndex: "99",  
+  display: "none",  
+  fontSize: "12px"  
+});  
+document.body.appendChild(clearFilterBtn);  
+  
+clearFilterBtn.addEventListener("click", () => {  
+  currentFilter = "all";  
+  
+  // Restore page from localStorage if exists, otherwise keep currentPage  
+  const saved = localStorage.getItem(`mcq_${currentExamKey}`);  
+  if (saved) {  
+    try {  
+      const parsed = JSON.parse(saved);  
+      currentPage = parsed.page || currentPage; // keep saved page  
+    } catch (e) {  
+      console.warn("Failed to restore page:", e);  
+    }  
+  }  
+  
+  renderPage(currentPage);  
+  hideClearFilterButton();  
+});  
+  
+  
+function showClearFilterButton() {  
+  clearFilterBtn.style.display = "block";  
+}  
+function hideClearFilterButton() {  
+  clearFilterBtn.style.display = "none";  
+}  
+  
+// ==================== RENDER PAGE ====================  
+function renderPage(page) {  
+  questionsDiv.innerHTML = "";  
+  
+  if (currentFilter === "all") hideClearFilterButton();  
+  else showClearFilterButton();  
+  
+  let filtered = data.questions;  
+  if (currentFilter === "right") filtered = data.questions.filter((q) => q.selected && q.selected === q.answer);  
+  if (currentFilter === "wrong") filtered = data.questions.filter((q) => q.selected && q.selected !== q.answer);  
+  if (currentFilter === "fav") {  
+    const favs = getFavs();  
+    filtered = data.questions.filter((q) => favs.includes(q.label));  
+  }  
+  
+  const totalPages = Math.ceil(filtered.length / perPage);  
+  const start = (page - 1) * perPage;  
+  const end = Math.min(start + perPage, filtered.length);  
+  const pageQuestions = filtered.slice(start, end);  
+  
+  const favList = getFavs();  
+  
+  pageQuestions.forEach((q, idx) => {  
+    const card = document.createElement("div");  
+    card.className = "question-card";  
+  
+    const label = document.createElement("div");  
+    label.className = "question-label";  
+    label.innerHTML = `<div>${start + idx + 1}. ${q.label}</div>`;  
+  
+    // 💖 Heart button  
+    const heart = document.createElement("span");  
+    heart.className = "heart-btn";  
+    heart.innerHTML = favList.includes(q.label) ? "❤️" : "🤍";  
+    heart.style.cursor = "pointer";  
+    heart.style.marginLeft = "8px";  
+    heart.style.fontSize = "20px";  
+    heart.onclick = (e) => {  
+      e.stopPropagation();  
+      let favs = getFavs();  
+      if (favs.includes(q.label)) {  
+        favs = favs.filter((f) => f !== q.label);  
+        heart.innerHTML = "🤍";  
+      } else {  
+        favs.push(q.label);  
+        heart.innerHTML = "❤️";  
+      }  
+      saveFavs(favs);  
+      updateCounter();  
+    };  
+  
+    label.appendChild(heart);  
+    card.appendChild(label);  
+  
+    const optionsDiv = document.createElement("div");  
+    optionsDiv.className = "options";  
+    q.options.forEach((opt, oidx) => {  
+      const optionEl = document.createElement("div");  
+      optionEl.className = "option";  
+      optionEl.innerHTML = opt;  
+  
+      const thisKey = ["a", "b", "c", "d"][oidx];  
+  
+      if (q.selected) {  
+        optionEl.classList.add("disabled");  
+        if (thisKey === q.answer) optionEl.classList.add("correct");  
+        if (thisKey === q.selected && q.selected !== q.answer) optionEl.classList.add("wrong");  
+      }  
+  
+      optionEl.addEventListener("click", () => {  
+        if (q.selected) return;  
+        q.selected = thisKey;  
+        optionsDiv.querySelectorAll(".option").forEach((o) => o.classList.add("disabled"));  
+        if (q.selected === q.answer) optionEl.classList.add("correct");  
+        else {  
+          optionEl.classList.add("wrong");  
+          const rightBtn = optionsDiv.querySelector(  
+            `.option:nth-child(${q.answer.charCodeAt(0) - 97 + 1})`  
+          );  
+          if (rightBtn) rightBtn.classList.add("correct");  
+        }  
+        updateCounter();  
+      });  
+  
+      optionsDiv.appendChild(optionEl);  
+    });  
+  
+    card.appendChild(optionsDiv);  
+    questionsDiv.appendChild(card);  
+  });  
+  
+  renderPagination(page, filtered.length);  
+}  
+// ==================== PAGINATION ====================  
+function renderPagination(page, totalQuestions) {  
+  paginationDiv.innerHTML = ""; // Clear previous pagination  
+  
+  const totalPages = Math.ceil(totalQuestions / perPage);  
+  
+  // ---------------- Pagination buttons wrapper ----------------  
+  const wrapper = document.createElement("div");  
+  wrapper.className = "pagination-menu"; // wrapper for buttons  
+  wrapper.style.display = "flex";  
+  wrapper.style.alignItems = "center";  
+  wrapper.style.gap = "4px"; // spacing between buttons  
+  
+  const makeBtn = (txt, click, disabled) => {  
+    const b = document.createElement("button");  
+    b.textContent = txt;  
+    if (disabled) b.classList.add("disabled");  
+    b.onclick = click;  
+    wrapper.appendChild(b);  
+  };  
+  
+  // First page  
+  makeBtn("<<", () => { currentPage = 1; renderPage(currentPage); saveProgress(); }, page === 1);  
+  
+  // Previous page  
+  makeBtn("<", () => { currentPage--; renderPage(currentPage); saveProgress(); }, page === 1);  
+  
+  // Current page ±1  
+  for (let i = Math.max(1, page - 1); i <= Math.min(totalPages, page + 1); i++) {  
+    makeBtn(i, () => { currentPage = i; renderPage(currentPage); saveProgress(); }, i === page);  
+  }  
+  
+  // Next page  
+  makeBtn(">", () => { currentPage++; renderPage(currentPage); saveProgress(); }, page === totalPages);  
+  
+  // Last page  
+  makeBtn(">>", () => { currentPage = totalPages; renderPage(currentPage); saveProgress(); }, page === totalPages);  
+  
+  // Append pagination buttons wrapper to paginationDiv  
+  paginationDiv.appendChild(wrapper);  
+  
+  // ---------------- Jump to Page Input ----------------  
+  const jumpDiv = document.createElement("div");  
+  jumpDiv.style.display = "flex";  
+  jumpDiv.style.alignItems = "center";  
+  jumpDiv.style.marginTop = "10px"; // spacing below buttons  
+  
+  const input = document.createElement("input");  
+  input.type = "number";  
+  input.min = 1;  
+  input.max = totalPages;  
+  input.placeholder = `${currentPage}/${totalPages}`;  
+  input.style.width = "60px";  
+  input.style.marginRight = "5px";  
+  input.style.padding = "4px";  
+  input.style.border = "1px solid #6a1b9a";  
+  input.style.borderRadius = "4px";  
+  
+  const jumpBtn = document.createElement("button");  
+  jumpBtn.textContent = "Go";  
+  jumpBtn.style.padding = "4px 10px";  
+  jumpBtn.addEventListener("click", () => {  
+    let num = parseInt(input.value, 10);  
+    if (!isNaN(num) && num >= 1 && num <= totalPages) {  
+      currentPage = num;  
+      renderPage(currentPage);  
+      saveProgress();  
+    } else {  
+      alert(`Please enter a number between 1 and ${totalPages}`);  
+    }  
+    input.value = "";  
+  });  
+  
+  jumpDiv.appendChild(input);  
+  jumpDiv.appendChild(jumpBtn);  
+  
+  // Append jumpDiv to paginationDiv (outside pagination-menu)  
+  paginationDiv.appendChild(jumpDiv);  
+}  
+  
+// ==================== RESET BUTTON ====================  
+const resetBtn = document.createElement("button");  
+resetBtn.textContent = "⟲ Reset";  
+Object.assign(resetBtn.style, {  
+  position: "fixed",  
+  bottom: "225px",  
+  left: "0",  
+  background: "#d32f2f",  
+  color: "#fff",  
+  border: "none",  
+  padding: "6px 12px",  
+  cursor: "pointer",  
+  borderTopRightRadius: "10px",  
+  borderBottomRightRadius: "10px",  
+  zIndex: "99",  
+});  
+document.body.appendChild(resetBtn);  
+  
+// Reset all also fav   
+resetBtn.onclick = () => {  
+  if (!currentExamKey) return;  
+  const choice = prompt("Type 'all' to reset entire exam OR 'this' to reset this page only:");  
+  if (!choice) return;  
+  
+  if (choice.toLowerCase() === "all") {  
+    if (!confirm("Reset ALL pages and favorites for this exam?")) return;  
+    // Clear answers  
+    localStorage.removeItem(`mcq_${currentExamKey}`);  
+    data.questions.forEach((q) => (q.selected = null));  
+    // Clear favorites  
+    localStorage.removeItem(`fav_${currentExamKey}`);  
+  
+    currentPage = 1;  
+    currentFilter = "all";  
+    updateCounter();  
+    renderPage(currentPage);  
+  } else if (choice.toLowerCase() === "this") {  
+    if (!confirm("Reset this page and favorites for this exam?")) return;  
+    const start = (currentPage - 1) * perPage;  
+    const end = Math.min(start + perPage, data.questions.length);  
+    // Clear answers for current page  
+    data.questions.slice(start, end).forEach((pq) => (pq.selected = null));  
+    // Clear all favorites for the exam  
+    localStorage.removeItem(`fav_${currentExamKey}`);  
+  
+    saveProgress();  
+    updateCounter();  
+    renderPage(currentPage);  
+  } else alert("Invalid input!");  
+};  
+  
+// ==================== SCROLL BUTTON ====================  
+const scrollBtn = document.createElement("button");  
+scrollBtn.textContent = "↓ Bottom";  
+Object.assign(scrollBtn.style, {  
+  position: "fixed",  
+  bottom: "20px",  
+  right: "0",  
+  background: "#6a1b9a",  
+  color: "#fff",  
+  border: "none",  
+  padding: "6px 11px",  
+  cursor: "pointer",  
+  borderTopLeftRadius: "10px",  
+  borderBottomLeftRadius: "10px",  
+  zIndex: "99",  
+});  
+document.body.appendChild(scrollBtn);  
+  
+scrollBtn.addEventListener("click", () => {  
+  if (scrollBtn.textContent === "↓ Bottom") window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });  
+  else window.scrollTo({ top: 0, behavior: "smooth" });  
+});  
+window.addEventListener("scroll", () => {  
+  const scrolled = window.scrollY / (document.body.scrollHeight - window.innerHeight);  
+  scrollBtn.textContent = scrolled > 0.1 ? "↑ Top" : "↓ Bottom";  
+});  
+</script>  
+  
+  
+</body>  
+</html>
