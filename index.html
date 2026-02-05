@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />  
 <link rel="shortcut icon" href="icons/icon-192.png" type="image/x-icon">  
 <link rel="stylesheet" href="style.css">  
-<!-- ✅ Load MathJax with LaTeX rendering -->  
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>  
 </head>  
 <body>  
@@ -244,6 +243,9 @@ function hideClearFilterButton() {
 function renderPage(page) {  
   questionsDiv.innerHTML = "";  
   
+  // Check if we need to show the copy button
+  updateCopyButtonVisibility();
+
   if (currentFilter === "all") hideClearFilterButton();  
   else showClearFilterButton();  
   
@@ -489,7 +491,69 @@ scrollBtn.addEventListener("click", () => {
 window.addEventListener("scroll", () => {  
   const scrolled = window.scrollY / (document.body.scrollHeight - window.innerHeight);  
   scrollBtn.textContent = scrolled > 0.1 ? "↑ Top" : "↓ Bottom";  
-});  
+});
+
+// ==================== COPY IDS BUTTON ====================
+const copyBtn = document.createElement("button");
+copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy IDs';
+Object.assign(copyBtn.style, {
+  position: "fixed",
+  bottom: "125px", // Above Clear Filter
+  right: "0",
+  background: "#e67e22",
+  color: "#fff",
+  border: "none",
+  padding: "6px 12px",
+  cursor: "pointer",
+  borderTopLeftRadius: "10px",
+  borderBottomLeftRadius: "10px",
+  zIndex: "99",
+  display: "none",
+  fontSize: "12px",
+  boxShadow: "-2px 2px 5px rgba(0,0,0,0.2)"
+});
+document.body.appendChild(copyBtn);
+
+copyBtn.addEventListener("click", () => {
+  let ids = [];
+  // Scan all questions to find matches based on currentFilter
+  data.questions.forEach((q, index) => {
+    const questionNumber = index + 1; // 1-based index
+    let isMatch = false;
+
+    if (currentFilter === "right" && q.selected === q.answer) isMatch = true;
+    else if (currentFilter === "wrong" && q.selected && q.selected !== q.answer) isMatch = true;
+    else if (currentFilter === "fav") {
+      const favs = getFavs();
+      if (favs.includes(q.label)) isMatch = true;
+    }
+
+    if (isMatch) ids.push(questionNumber);
+  });
+
+  if (ids.length === 0) {
+    alert("No questions found in this list to copy!");
+    return;
+  }
+
+  navigator.clipboard.writeText(ids.join(", ")).then(() => {
+    const originalText = copyBtn.innerHTML;
+    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    copyBtn.style.background = "#27ae60";
+    setTimeout(() => {
+      copyBtn.innerHTML = originalText;
+      copyBtn.style.background = "#e67e22";
+    }, 1500);
+  });
+});
+
+function updateCopyButtonVisibility() {
+  if (currentFilter !== "all") {
+    copyBtn.style.display = "block";
+  } else {
+    copyBtn.style.display = "none";
+  }
+}
 </script>  
   
   
