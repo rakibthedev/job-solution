@@ -239,6 +239,24 @@ function showClearFilterButton() {
 function hideClearFilterButton() {
   clearFilterBtn.style.display = "none";
 }
+// ==================== COPY IDS BUTTON ====================
+const copyIdsBtn = document.createElement("button");
+copyIdsBtn.textContent = "📋 Copy IDs";
+Object.assign(copyIdsBtn.style, {
+  position: "fixed",
+  bottom: "120px",
+  right: "0",
+  background: "#1565c0",
+  color: "#fff",
+  border: "none",
+  padding: "6px 12px",
+  cursor: "pointer",
+  borderTopLeftRadius: "10px",
+  borderBottomLeftRadius: "10px",
+  zIndex: "99",
+  fontSize: "12px"
+});
+document.body.appendChild(copyIdsBtn);
 
 // ==================== RENDER PAGE ====================
 function renderPage(page) {
@@ -490,8 +508,45 @@ window.addEventListener("scroll", () => {
   const scrolled = window.scrollY / (document.body.scrollHeight - window.innerHeight);
   scrollBtn.textContent = scrolled > 0.1 ? "↑ Top" : "↓ Bottom";
 });
+
+function getFilteredQuestionIds() {
+  let list = data.questions;
+
+  if (currentFilter === "right") {
+    list = data.questions.filter(
+      (q) => q.selected && q.selected === q.answer
+    );
+  }
+
+  if (currentFilter === "wrong") {
+    list = data.questions.filter(
+      (q) => q.selected && q.selected !== q.answer
+    );
+  }
+
+  if (currentFilter === "fav") {
+    const favs = getFavs();
+    list = data.questions.filter((q) => favs.includes(q.label));
+  }
+
+  return list.map((q) => q.label).join(", ");
+}
+
+copyIdsBtn.addEventListener("click", () => {
+  const ids = getFilteredQuestionIds();
+
+  if (!ids) {
+    alert("No question IDs to copy!");
+    return;
+  }
+
+  navigator.clipboard.writeText(ids).then(() => {
+    copyIdsBtn.textContent = "✅ Copied!";
+    setTimeout(() => (copyIdsBtn.textContent = "📋 Copy IDs"), 1200);
+  });
+});
 </script>
 
 
 </body>
-</html>
+  </html>
