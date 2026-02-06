@@ -516,29 +516,35 @@ document.body.appendChild(copyBtn);
 
 copyBtn.addEventListener("click", () => {
   let ids = [];
-  // Scan all questions to find matches based on currentFilter
-  data.questions.forEach((q, index) => {
-    const questionNumber = index + 1; // 1-based index
-    let isMatch = false;
+  
+  // Define which questions to look at based on the active filter
+  let filteredList = [];
+  if (currentFilter === "all") {
+    filteredList = data.questions;
+  } else if (currentFilter === "right") {
+    filteredList = data.questions.filter((q) => q.selected === q.answer);
+  } else if (currentFilter === "wrong") {
+    filteredList = data.questions.filter((q) => q.selected && q.selected !== q.answer);
+  } else if (currentFilter === "fav") {
+    const favs = getFavs();
+    filteredList = data.questions.filter((q) => favs.includes(q.label));
+  }
 
-    if (currentFilter === "right" && q.selected === q.answer) isMatch = true;
-    else if (currentFilter === "wrong" && q.selected && q.selected !== q.answer) isMatch = true;
-    else if (currentFilter === "fav") {
-      const favs = getFavs();
-      if (favs.includes(q.label)) isMatch = true;
-    }
-
-    if (isMatch) ids.push(questionNumber);
-  });
+  // Extract the q_id from each filtered question
+  // If q_id doesn't exist, it falls back to a template or notice
+  ids = filteredList
+    .map(q => q.q_id) 
+    .filter(id => id !== undefined && id !== null);
 
   if (ids.length === 0) {
-    alert("No questions found in this list to copy!");
+    alert("No Question IDs (q_id) found for this filter!");
     return;
   }
 
+  // Copy the IDs as a comma-separated string
   navigator.clipboard.writeText(ids.join(", ")).then(() => {
     const originalText = copyBtn.innerHTML;
-    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied IDs!';
     copyBtn.style.background = "#27ae60";
     setTimeout(() => {
       copyBtn.innerHTML = originalText;
@@ -546,6 +552,7 @@ copyBtn.addEventListener("click", () => {
     }, 1500);
   });
 });
+
 
 function updateCopyButtonVisibility() {
   if (currentFilter !== "all") {
